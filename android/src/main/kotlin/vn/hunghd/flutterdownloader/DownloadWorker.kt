@@ -273,6 +273,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
         var responseCode: Int
         var times: Int
         visited = HashMap()
+        var directUrl = false
         try {
             val task = taskDao?.loadTask(id.toString())
             if (task != null) {
@@ -313,7 +314,12 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 httpConn.setRequestProperty("User-Agent", "Mozilla/5.0...")
 
                 // setup request headers if it is set
-                setupHeaders(httpConn, headers)
+                if (directUrl == true){
+                    var emptyHeader = ""
+                    setupHeaders(httpConn, emptyHeader)
+                }else {
+                    setupHeaders(httpConn, headers)
+                }
                 // try to continue downloading a file from its partial downloaded data.
                 if (isResume) {
                     downloadedBytes = setupPartialDownloadedDataHeader(httpConn, actualFilename, savedDir)
@@ -332,12 +338,15 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                         next = URL(base, location) // Deal with relative URLs
                         url = next.toExternalForm()
                         log("New url: $url")
+                        directUrl = true
+
                         continue
                     }
                 }
                 break
             }
             httpConn!!.connect()
+            log("create new http conn connect")
             val contentType: String?
             if ((responseCode == HttpURLConnection.HTTP_OK || isResume && responseCode == HttpURLConnection.HTTP_PARTIAL) && !isStopped) {
                 contentType = httpConn.contentType
