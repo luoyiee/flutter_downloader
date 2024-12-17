@@ -15,3 +15,4 @@ library flutter_downloader;
 export 'src/downloader.dart';
 export 'src/exceptions.dart';
 export 'src/models.dart';
+export 'src/callback_dispatcher.dart';

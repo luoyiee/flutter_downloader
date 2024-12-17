@@ -17,11 +17,14 @@ typedef DownloadCallback = void Function(
   String id,
   int status,
   int progress,
+  String? response,
 );
 
 /// Provides access to all functions of the plugin in a single place.
 class FlutterDownloader {
   static const _channel = MethodChannel('vn.hunghd/downloader');
+
+  static const _eventChannel = MethodChannel('vn.hunghd/downloader_response');
 
   static bool _initialized = false;
 
@@ -51,7 +54,7 @@ class FlutterDownloader {
     );
 
     _debug = debug;
-
+    
     final callback = PluginUtilities.getCallbackHandle(callbackDispatcher)!;
     await _channel.invokeMethod<void>('initialize', <dynamic>[
       callback.toRawHandle(),

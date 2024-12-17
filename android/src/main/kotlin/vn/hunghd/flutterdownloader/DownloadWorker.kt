@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -30,6 +31,8 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.view.FlutterCallbackInformation
 import org.json.JSONException
 import org.json.JSONObject
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -76,6 +79,9 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
     private var lastCallUpdateNotification: Long = 0
     private var step = 0
     private var saveInPublicStorage = false
+
+    private var platformChannel: MethodChannel? = null;
+
     private fun startBackgroundIsolate(context: Context) {
         synchronized(isolateStarted) {
             if (backgroundFlutterEngine == null) {
@@ -114,8 +120,11 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
             backgroundFlutterEngine!!.dartExecutor,
             "vn.hunghd/downloader_background"
         )
+
+//        platformChannel = MethodChannel(backgroundFlutterEngine!!.dartExecutor, "vn.flutter.downloader.response_channel")
         backgroundChannel?.setMethodCallHandler(this)
     }
+
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         if (call.method.equals("didInitializeDispatcher")) {
@@ -274,7 +283,9 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
         var times: Int
         visited = HashMap()
         var directUrl = false
+
         try {
+
             val task = taskDao?.loadTask(id.toString())
             if (task != null) {
                 lastProgress = task.progress
@@ -325,6 +336,41 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                     downloadedBytes = setupPartialDownloadedDataHeader(httpConn, actualFilename, savedDir)
                 }
                 responseCode = httpConn.responseCode
+
+                if (responseCode == 403){
+                    // 将 InputStream 包装在 BufferedInputStream 中
+                    val bufferedInputStream = BufferedInputStream(inputStream)
+
+                    // 检查是否支持 mark 和 reset
+                    if (bufferedInputStream.markSupported()) {
+                        try {
+                            // 标记流的当前位置
+                            bufferedInputStream.mark(Int.MAX_VALUE)
+
+                            // 读取流并转换为字符串
+                            val body = convertStreamToString(bufferedInputStream)
+                            println("Response body: $body")
+                            sendResponseEvent(body)
+                            // 重置流到标记位置
+                            bufferedInputStream.reset()
+                            println("Stream has been reset.")
+
+                            // 再次读取流并转换为字符串
+                            val bodyAgain = convertStreamToString(bufferedInputStream)
+                            println("Response body after reset: $bodyAgain")
+                        } catch (e: IOException) {
+                            e.printStackTrace()
+                        } finally {
+                            try {
+                                bufferedInputStream.close()
+                            } catch (e: IOException) {
+                                e.printStackTrace()
+                            }
+                        }
+                    } else {
+                        println("BufferedInputStream does not support mark and reset.")
+                    }
+                }
                 when (responseCode) {
                     HttpURLConnection.HTTP_MOVED_PERM,
                     HttpURLConnection.HTTP_SEE_OTHER,
@@ -382,6 +428,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
 
                 // opens input stream from the HTTP connection
                 inputStream = httpConn.inputStream
+
                 val savedFilePath: String?
                 // opens an output stream to save into file
                 // there are two case:
@@ -740,6 +787,18 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
         }
     }
 
+    private fun sendResponseEvent(response: String) {
+        val args: MutableList<Any> = ArrayList()
+        val callbackHandle: Long = inputData.getLong(ARG_CALLBACK_HANDLE, 0)
+        args.add(callbackHandle)
+        args.add(response)
+        synchronized(isolateStarted) {
+            Handler(applicationContext.mainLooper).post {
+                backgroundChannel?.invokeMethod("response", args)
+            }
+        }
+    }
+
     private fun getCharsetFromContentType(contentType: String?): String? {
         if (contentType == null) return null
         val m = charsetPattern.matcher(contentType)
@@ -898,6 +957,21 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 e.printStackTrace()
             }
         }
+    }
+
+
+    // 将 InputStream 转换为字符串
+    @Throws(IOException::class)
+    fun convertStreamToString(inputStream: InputStream): String {
+        val buffer = ByteArrayOutputStream()
+        val data = ByteArray(16384)
+        var nRead: Int
+
+        while (inputStream.read(data, 0, data.size).also { nRead = it } != -1) {
+            buffer.write(data, 0, nRead)
+        }
+
+        return buffer.toString("UTF-8")
     }
 
     init {

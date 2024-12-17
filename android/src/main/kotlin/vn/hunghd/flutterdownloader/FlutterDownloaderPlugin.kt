@@ -1,5 +1,6 @@
 package vn.hunghd.flutterdownloader
 
+import android.content.BroadcastReceiver
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
@@ -23,7 +24,6 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-
 private const val invalidTaskId = "invalid_task_id"
 private const val invalidStatus = "invalid_status"
 private const val invalidData = "invalid_data"
@@ -454,4 +454,5 @@ class FlutterDownloaderPlugin : MethodChannel.MethodCallHandler, FlutterPlugin {
         const val SHARED_PREFERENCES_KEY = "vn.hunghd.downloader.pref"
         const val CALLBACK_DISPATCHER_HANDLE_KEY = "callback_dispatcher_handle_key"
     }
+
 }
