@@ -274,6 +274,7 @@ class FlutterDownloader {
     required String taskId,
     bool requiresStorageNotLow = true,
     int timeout = 15000,
+    Map<String, String> headers = const {},
   }) async {
     assert(_initialized, 'plugin flutter_downloader is not initialized');
 
@@ -282,6 +283,7 @@ class FlutterDownloader {
         'task_id': taskId,
         'requires_storage_not_low': requiresStorageNotLow,
         'timeout': timeout,
+        'headers': jsonEncode(headers),
       });
     } on PlatformException catch (e) {
       _log(e.message);

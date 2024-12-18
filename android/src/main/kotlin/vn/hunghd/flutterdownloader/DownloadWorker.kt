@@ -339,7 +339,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
 
                 if (responseCode == 403){
                     // 将 InputStream 包装在 BufferedInputStream 中
-                    val bufferedInputStream = BufferedInputStream(inputStream)
+                    val bufferedInputStream = BufferedInputStream(httpConn.errorStream)
 
                     // 检查是否支持 mark 和 reset
                     if (bufferedInputStream.markSupported()) {
@@ -349,15 +349,12 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
 
                             // 读取流并转换为字符串
                             val body = convertStreamToString(bufferedInputStream)
-                            println("Response body: $body")
                             sendResponseEvent(body)
                             // 重置流到标记位置
                             bufferedInputStream.reset()
-                            println("Stream has been reset.")
 
                             // 再次读取流并转换为字符串
                             val bodyAgain = convertStreamToString(bufferedInputStream)
-                            println("Response body after reset: $bodyAgain")
                         } catch (e: IOException) {
                             e.printStackTrace()
                         } finally {
@@ -368,7 +365,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                             }
                         }
                     } else {
-                        println("BufferedInputStream does not support mark and reset.")
+                        log("BufferedInputStream does not support mark and reset.")
                     }
                 }
                 when (responseCode) {

@@ -273,12 +273,13 @@ class FlutterDownloaderPlugin : MethodChannel.MethodCallHandler, FlutterPlugin {
                 }
                 val partialFilePath = task.savedDir + File.separator + filename
                 val partialFile = File(partialFilePath)
+                val headers: String = call.requireArgument("headers")
                 if (partialFile.exists()) {
                     val request: WorkRequest = buildRequest(
                         task.url,
                         task.savedDir,
                         task.filename,
-                        task.headers,
+                        headers,
                         task.showNotification,
                         task.openFileFromNotification,
                         true,
