@@ -337,7 +337,11 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 }
                 responseCode = httpConn.responseCode
 
-                if (responseCode == 403 || responseCode == 410){
+                if (responseCode == 410) {
+                    var taskId = id.toString()
+                    val response = "{\"code\":410,\"id\":\"" + taskId + "\"}"
+                    sendResponseEvent(response)
+                } else if (responseCode == 403){
                     // 将 InputStream 包装在 BufferedInputStream 中
                     val bufferedInputStream = BufferedInputStream(httpConn.errorStream)
 
