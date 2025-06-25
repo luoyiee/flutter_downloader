@@ -157,7 +157,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
         dbHelper = TaskDbHelper.getInstance(applicationContext)
         taskDao = TaskDao(dbHelper!!)
         val url: String =
-            inputData.getString(ARG_URL) ?: throw IllegalArgumentException("Argument '$ARG_URL' should not be null")
+            inputData.getString(ARG_URL)
+                ?: throw IllegalArgumentException("Argument '$ARG_URL' should not be null")
         val filename: String? =
             inputData.getString(ARG_FILE_NAME) // ?: throw IllegalArgumentException("Argument '$ARG_FILE_NAME' should not be null")
         val savedDir: String = inputData.getString(ARG_SAVED_DIR)
@@ -179,9 +180,9 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
         val task = taskDao?.loadTask(id.toString())
         log(
             "DownloadWorker{url=$url,filename=$filename,savedDir=$savedDir,header=$headers,isResume=$isResume,status=" + (
-                task?.status
-                    ?: "GONE"
-                )
+                    task?.status
+                        ?: "GONE"
+                    )
         )
 
         // Task has been deleted or cancelled
@@ -218,7 +219,14 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
             taskDao = null
             Result.success()
         } catch (e: Exception) {
-            updateNotification(applicationContext, filename ?: url, DownloadStatus.FAILED, -1, null, true)
+            updateNotification(
+                applicationContext,
+                filename ?: url,
+                DownloadStatus.FAILED,
+                -1,
+                null,
+                true
+            )
             taskDao?.updateTask(id.toString(), DownloadStatus.FAILED, lastProgress)
             e.printStackTrace()
             dbHelper = null
@@ -321,17 +329,37 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 log("Open connection to $url")
                 httpConn.connectTimeout = timeout
                 httpConn.readTimeout = timeout
-                httpConn.instanceFollowRedirects = false // Make the logic below easier to detect redirections
+                httpConn.instanceFollowRedirects =
+                    false // Make the logic below easier to detect redirections
                 httpConn.setRequestProperty("User-Agent", "Mozilla/5.0...")
                 setupHeaders(httpConn, headers)
                 // try to continue downloading a file from its partial downloaded data.
                 if (isResume) {
-                    downloadedBytes = setupPartialDownloadedDataHeader(httpConn, actualFilename, savedDir)
+                    downloadedBytes =
+                        setupPartialDownloadedDataHeader(httpConn, actualFilename, savedDir)
                 }
                 responseCode = httpConn.responseCode
 
                 //404
                 log("http responseCode: $responseCode ${httpConn.responseMessage}")
+
+                if (responseCode == 410) {
+                    var taskId = id.toString()
+                    val response = "{\"code\":410,\"id\":\"" + taskId + "\"}"
+                    sendResponseEvent(response)
+                } else if (responseCode == HttpURLConnection.HTTP_FORBIDDEN) {
+                    log("403 Forbidden: 服务器拒绝访问")
+                    try {
+                        // 读取错误流（如果有）
+                        httpConn.errorStream?.use { errorStream ->
+                            val errorBody = errorStream.bufferedReader().use { it.readText() }
+                            log("Error response body: $errorBody")
+                            sendResponseEvent(errorBody)
+                        }
+                    } catch (e: IOException) {
+                        log("Failed to read error stream: ${e.message}")
+                    }
+                }
 
                 if (responseCode in 300..308) {
                     val location = httpConn.getHeaderField("Location")
@@ -345,30 +373,10 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                         httpConn.instanceFollowRedirects = false
                         httpConn.setRequestProperty("User-Agent", "Mozilla/5.0...")
                         setupHeaders(httpConn, headers) // Make sure headers are reapplied
-                        if (isResume) {
-                            downloadedBytes = setupPartialDownloadedDataHeader(httpConn, actualFilename, savedDir)
-                        }
                         continue
                     }
                 }
-
-                if (responseCode == 410) {
-                    var taskId = id.toString()
-                    val response = "{\"code\":410,\"id\":\"" + taskId + "\"}"
-                    sendResponseEvent(response)
-                } else if (responseCode == HttpURLConnection.HTTP_FORBIDDEN){
-                    log("403 Forbidden: 服务器拒绝访问")
-                    try {
-                        // 读取错误流（如果有）
-                        httpConn.errorStream?.use { errorStream ->
-                            val errorBody = errorStream.bufferedReader().use { it.readText() }
-                            log("Error response body: $errorBody")
-                            sendResponseEvent(errorBody)
-                        }
-                    } catch (e: IOException) {
-                        log("Failed to read error stream: ${e.message}")
-                    }
-                }
+                break
             }
             httpConn!!.connect()
             log("create new http conn connect")
@@ -516,7 +524,14 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
             }
         } catch (e: IOException) {
             taskDao!!.updateTask(id.toString(), DownloadStatus.FAILED, lastProgress)
-            updateNotification(context, actualFilename ?: fileURL, DownloadStatus.FAILED, -1, null, true)
+            updateNotification(
+                context,
+                actualFilename ?: fileURL,
+                DownloadStatus.FAILED,
+                -1,
+                null,
+                true
+            )
             e.printStackTrace()
         } finally {
             if (outputStream != null) {
@@ -649,15 +664,18 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Create the NotificationChannel
             val res = applicationContext.resources
-            val channelName: String = res.getString(R.string.flutter_downloader_notification_channel_name)
-            val channelDescription: String = res.getString(R.string.flutter_downloader_notification_channel_description)
+            val channelName: String =
+                res.getString(R.string.flutter_downloader_notification_channel_name)
+            val channelDescription: String =
+                res.getString(R.string.flutter_downloader_notification_channel_description)
             val importance: Int = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(CHANNEL_ID, channelName, importance)
             channel.description = channelDescription
             channel.setSound(null, null)
 
             // Add the channel
-            val notificationManager: NotificationManagerCompat = NotificationManagerCompat.from(context)
+            val notificationManager: NotificationManagerCompat =
+                NotificationManagerCompat.from(context)
             notificationManager.createNotificationChannel(channel)
         }
     }
@@ -828,7 +846,9 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
 
     private fun isImageOrVideoFile(contentType: String?): Boolean {
         val newContentType = getContentTypeWithoutCharset(contentType)
-        return newContentType != null && (newContentType.startsWith("image/") || newContentType.startsWith("video"))
+        return newContentType != null && (newContentType.startsWith("image/") || newContentType.startsWith(
+            "video"
+        ))
     }
 
     private fun isExternalStoragePath(filePath: String?): Boolean {
