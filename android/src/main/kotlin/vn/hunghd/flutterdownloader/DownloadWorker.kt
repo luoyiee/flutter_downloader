@@ -337,60 +337,34 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 }
                 responseCode = httpConn.responseCode
 
+                if (responseCode in 300..308) {
+                    val location = httpConn.getHeaderField("Location")
+                    if (!location.isNullOrEmpty()) {
+                        log("Redirecting to: $location")
+                        url = URL(URL(url), location).toString() // 处理相对 URL
+                        httpConn.disconnect()
+                        httpConn = URL(url).openConnection() as HttpURLConnection
+                        continue
+                    }
+                }
+
                 if (responseCode == 410) {
                     var taskId = id.toString()
                     val response = "{\"code\":410,\"id\":\"" + taskId + "\"}"
                     sendResponseEvent(response)
-                } else if (responseCode == 403){
-                    // 将 InputStream 包装在 BufferedInputStream 中
-                    val bufferedInputStream = BufferedInputStream(httpConn.errorStream)
-
-                    // 检查是否支持 mark 和 reset
-                    if (bufferedInputStream.markSupported()) {
-                        try {
-                            // 标记流的当前位置
-                            bufferedInputStream.mark(Int.MAX_VALUE)
-
-                            // 读取流并转换为字符串
-                            val body = convertStreamToString(bufferedInputStream)
-                            sendResponseEvent(body)
-                            // 重置流到标记位置
-                            bufferedInputStream.reset()
-
-                            // 再次读取流并转换为字符串
-                            val bodyAgain = convertStreamToString(bufferedInputStream)
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                        } finally {
-                            try {
-                                bufferedInputStream.close()
-                            } catch (e: IOException) {
-                                e.printStackTrace()
-                            }
+                } else if (responseCode == HttpURLConnection.HTTP_FORBIDDEN){
+                    log("403 Forbidden: 服务器拒绝访问")
+                    try {
+                        // 读取错误流（如果有）
+                        httpConn.errorStream?.use { errorStream ->
+                            val errorBody = errorStream.bufferedReader().use { it.readText() }
+                            log("Error response body: $errorBody")
+                            sendResponseEvent(errorBody)
                         }
-                    } else {
-                        log("BufferedInputStream does not support mark and reset.")
+                    } catch (e: IOException) {
+                        log("Failed to read error stream: ${e.message}")
                     }
                 }
-                when (responseCode) {
-                    HttpURLConnection.HTTP_MOVED_PERM,
-                    HttpURLConnection.HTTP_SEE_OTHER,
-                    HttpURLConnection.HTTP_MOVED_TEMP,
-                    307,
-                    308 -> {
-                        log("Response with redirection code")
-                        location = httpConn.getHeaderField("Location")
-                        log("Location = $location")
-                        base = URL(url)
-                        next = URL(base, location) // Deal with relative URLs
-                        url = next.toExternalForm()
-                        log("New url: $url")
-                        directUrl = true
-
-                        continue
-                    }
-                }
-                break
             }
             httpConn!!.connect()
             log("create new http conn connect")
@@ -530,6 +504,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 val errorMsg = if (isStopped) {
                     "Download canceled by user"
                 } else {
+                    //Download failed. HTTP 403 - Forbidden
                     "Download failed. HTTP $responseCode - ${httpConn.responseMessage ?: "No message"}"
                 }
                 log(errorMsg)
