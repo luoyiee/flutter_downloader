@@ -323,14 +323,15 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 httpConn.readTimeout = timeout
                 httpConn.instanceFollowRedirects = false // Make the logic below easier to detect redirections
                 httpConn.setRequestProperty("User-Agent", "Mozilla/5.0...")
+                setupHeaders(httpConn, headers)
 
                 // setup request headers if it is set
-                if (directUrl == true){
-                    var emptyHeader = ""
-                    setupHeaders(httpConn, emptyHeader)
-                }else {
-                    setupHeaders(httpConn, headers)
-                }
+//                if (directUrl == true){
+//                    var emptyHeader = ""
+//                    setupHeaders(httpConn, emptyHeader)
+//                }else {
+//                    setupHeaders(httpConn, headers)
+//                }
                 // try to continue downloading a file from its partial downloaded data.
                 if (isResume) {
                     downloadedBytes = setupPartialDownloadedDataHeader(httpConn, actualFilename, savedDir)
