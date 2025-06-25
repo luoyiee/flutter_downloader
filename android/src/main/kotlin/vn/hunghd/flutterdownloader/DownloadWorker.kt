@@ -526,8 +526,14 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 val status =
                     if (isStopped) if (loadedTask!!.resumable) DownloadStatus.PAUSED else DownloadStatus.CANCELED else DownloadStatus.FAILED
                 taskDao!!.updateTask(id.toString(), status, lastProgress)
+                // 增强错误日志
+                val errorMsg = if (isStopped) {
+                    "Download canceled by user"
+                } else {
+                    "Download failed. HTTP $responseCode - ${httpConn.responseMessage ?: "No message"}"
+                }
+                log(errorMsg)
                 updateNotification(context, actualFilename ?: fileURL, status, -1, null, true)
-                log(if (isStopped) "Download canceled" else "Server replied HTTP code: $responseCode")
             }
         } catch (e: IOException) {
             taskDao!!.updateTask(id.toString(), DownloadStatus.FAILED, lastProgress)
