@@ -330,6 +330,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                 }
                 responseCode = httpConn.responseCode
 
+                //404
                 log("http responseCode: $responseCode ${httpConn.responseMessage}")
 
                 if (responseCode in 300..308) {
@@ -339,6 +340,14 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                         url = URL(URL(url), location).toString() // 处理相对 URL
                         httpConn.disconnect()
                         httpConn = URL(url).openConnection() as HttpURLConnection
+                        httpConn.connectTimeout = timeout
+                        httpConn.readTimeout = timeout
+                        httpConn.instanceFollowRedirects = false
+                        httpConn.setRequestProperty("User-Agent", "Mozilla/5.0...")
+                        setupHeaders(httpConn, headers) // Make sure headers are reapplied
+                        if (isResume) {
+                            downloadedBytes = setupPartialDownloadedDataHeader(httpConn, actualFilename, savedDir)
+                        }
                         continue
                     }
                 }
